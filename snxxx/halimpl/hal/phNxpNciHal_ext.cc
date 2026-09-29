@@ -1336,7 +1336,16 @@ retryget:
   status = phNxpNciHal_send_ext_cmd(sizeof(get_cfg_eeprom), get_cfg_eeprom);
   if (status == NFCSTATUS_SUCCESS) {
     status = nxpncihal_ctrl.p_rx_data[3];
-    if (status != NFCSTATUS_SUCCESS) {
+    if (status == 0x09 /* NCI STATUS_INVALID_PARAM */) {
+      /* Older NFCC firmware doesn't know every parameter this HAL asks
+       * for (e.g. the SN100 FW shipped on raphael rejects the guard timer
+       * at A10B). Report it as unsupported so callers skip the setting;
+       * treating it as a failure restarts core init forever and
+       * NfcService's watchdog aborts the enable. */
+      ALOGW("EEPROM param %02X%02X not supported by NFCC firmware", addr[0],
+            addr[1]);
+      status = NFCSTATUS_FEATURE_NOT_SUPPORTED;
+    } else if (status != NFCSTATUS_SUCCESS) {
       ALOGE("failed to get requested memory address");
     } else if (mEEPROM_info->request_mode == GET_EEPROM_DATA) {
       if (mEEPROM_info->bufflen == 0xFF) {
